@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<!--[if lt IE 7]> <html class="no-js lt-ie9 lt-ie8 lt-ie7"> <![endif]-->
+<!--[if IE 7]>    <html class="no-js lt-ie9 lt-ie8"> <![endif]-->
+<!--[if IE 8]>    <html class="no-js lt-ie9"> <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js"> <!--<![endif]-->
+  <head>
+    <script type="text/javascript">
+        var host = "sudha247.github.io";
+        if ((host == window.location.host) && (window.location.protocol != "https:"))
+            window.location.protocol = "https";
+    </script>
+    <meta charset="utf-8">
+    
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <title>Introducing parallelism in Lwt with Multicore OCaml - Sudha Parimala</title>
+    <meta name="description" content="">
+    <meta property="og:locale" content="en_US"><meta property="og:type" content="article"><meta property="og:title" content="Introducing parallelism in Lwt with Multicore OCaml - Sudha Parimala"><meta property="og:site_name" content="Sudha Parimala"><meta property="og:description" content=""><meta property="og:url" content="http://localhost:4000/2020/10/01/lwt-multicore/"><meta property="article:published_time" content="2020-10-01T00:00:00+05:30"><meta property="article:author" content="http://localhost:4000/about">
+
+    
+
+    
+
+    <link rel="alternate" type="application/rss+xml" href="http://localhost:4000/feed.xml">
+    <link rel="shortcut icon" href="http://localhost:4000/favicon.ico">
+    <link rel="prefetch" href="http://localhost:4000">
+    <link rel="canonical" href="http://localhost:4000/2020/10/01/lwt-multicore/">
+    <link rel="stylesheet"
+    href="http://localhost:4000/assets/css/main.css">
+
+    <!-- IE Fixes -->
+    <!-- HTML5 Shim and Respond.js IE8 support of HTML5 elements and media queries -->
+    <!-- WARNING: Respond.js doesn't work if you view the page via file:// -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+      <script src="https://oss.maxcdn.com/respond/1.4.2/respond.min.js"></script>
+    <![endif]-->
+
+    <style type="text/css">a,.post-title a{color:#205081}a:hover{border-bottom-color:#205081}.sidebar{background-color:#205081}.wc-top,.sidebar-toggle:active,#sidebar-checkbox:checked ~ .sidebar-toggle{background-color:#205081}.sidebar a:hover,.sidebar .sidebar-nav a{border-bottom-color:#255d95}.sidebar .sidebar-nav{border-top-color:#255d95}.sidebar .sidebar-nav a.sidebar-nav-item:hover,.sidebar .sidebar-nav a.sidebar-nav-item:focus{background:#23588d}.sidebar .sidebar-nav .sidebar-nav-item.active{background-color:#1d4875}ul.social-media li>a{background-color:#1d4875;border-color:#255d95;border-bottom-color:#255d95 !important}ul.social-media li>a:hover{background-color:#b4d0ec}.btn{border-color:#205081;background:#205081}.btn:hover,.btn:focus{border-color:#1b436d;background:#1b436d}</style>
+  </head>
+  <body>
+    <input type="checkbox" class="sidebar-checkbox" id="sidebar-checkbox"><div class="sidebar" id="sidebar">    <img    src="http://localhost:4000/assets/images/avatar.png"    alt="Sudha Parimala" />    <div class="sidebar-info">      <p>              </p>  </div>  <nav class="sidebar-nav">    <a class="sidebar-nav-item"      href="http://localhost:4000/">      Home    </a>                <a class="sidebar-nav-item "      href="http://localhost:4000/about">      About me    </a>                <a class="sidebar-nav-item "      href="http://localhost:4000/archive">      Blog archive    </a>      </nav>  <div class="sidebar-info small">     <p>       <a href="https://github.com/gayanvirajith/gaya" target="_blank">Gaya</a> theme.       Powered by <a href="http://jekyllrb.com" target="_blank">Jekyll</a>.     </p>  </div>  <ul class="social-media">                <li>        <a title="Sudha247 on Github"            href="https://github.com/Sudha247"            class="github wc-img-replace" target="_blank">Github</a>    </li>            <li>        <a title="Subscribe via RSS"            href="http://localhost:4000/feed.xml"            class="rss wc-img-replace" target="_blank">            RSS        </a>    </li></ul>  <!-- <ul class="social-media">  <li>    <a title="Sudha247 on Github"        href="https://github.com/Sudha247"        class="github wc-img-replace" target="_blank">Github</a>  </li>  <li>    <a title="Subscribe via RSS"        href="http://localhost:4000/feed.xml"        class="rss wc-img-replace" target="_blank">        RSS    </a></li></ul> --></div>
+
+    <div class="main-wrapper">
+      <div class="header">
+        <div class="container">
+          <div class="header-logo"></div>
+          <div class="header-title">
+            <a href="http://localhost:4000/"
+              title="Sudha Parimala">
+              <h3>Sudha Parimala<small></small></h3>
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="container content">
+          <div class="post">
+
+  
+
+  
+
+  <header class="post-header">
+    <h1 class="post-title">Introducing parallelism in Lwt with Multicore OCaml</h1>
+    <p class="post-meta">
+    
+    <span class="post-date">
+    Oct 1, 2020  
+    </span>
+    </p>
+  </header>
+
+  <article class="post-content">
+    <p><a href="https://ocsigen.org/lwt/">Lwt</a> is OCaml’s widely used concurrency
+library. It offers powerful primitives for concurrent programming which have
+been used in many systems for effective I/O parallelism.
+Recently, we have been doing some experiments to add support for CPU
+parallelism in Lwt with <a href="https://github.com/ocaml-multicore/ocaml-multicore">Multicore OCaml</a>.
+This post will showcase some ways to speed up Lwt applications with Multicore
+OCaml.</p>
+
+<h3 id="lwt_preemptive">Lwt_preemptive</h3>
+
+<p><code class="language-plaintext highlighter-rouge">Lwt_preemptive</code> module has the facility for preemptive scheduling, unlike rest
+of Lwt which operates in a cooperative manner.
+<a href="https://ocsigen.org/lwt/5.2.0/api/Lwt_preemptive"><code class="language-plaintext highlighter-rouge">Lwt_preemptive</code></a> runs every task in a new <a href="https://caml.inria.fr/pub/docs/manual-ocaml/libref/Thread.html">systhread</a>.
+All the systhreads run concurrently, but need to obtain the master runtime lock in order to execute OCaml code. Hence, the OCaml parts of the program do not run any faster.</p>
+
+<p>We bring in parallelism via the <code class="language-plaintext highlighter-rouge">Lwt_preemptive</code> module.
+In the Multicore version illustrated below, every new task will run on a
+separate <a href="https://github.com/ocaml-multicore/ocaml-multicore/blob/parallel_minor_gc/stdlib/domain.mli">domain</a>,
+in parallel with all other tasks running at that point. This gives us an easy
+way to run tasks in multiple cores. For best results, number of
+domains spawned should be equal to the number of cores available. Number of
+domains can be controlled via the <code class="language-plaintext highlighter-rouge">Lwt_preemptive.set_bounds</code> method. The
+<a href="https://github.com/Sudha247/lwt-multicore/blob/master/src/unix/lwt_preemptive.mli">API docs</a> have more details.</p>
+
+<p>We shall go through an example to see how we could use <code class="language-plaintext highlighter-rouge">Lwt_preemptive</code>
+to speedup an application.</p>
+
+<h3 id="installation">Installation</h3>
+
+<p>To start with, Multicore OCaml needs to be installed. This can be done with
+multicore opam. Installation instructions can be found <a href="https://github.com/ocaml-multicore/multicore-opam#install-multicore-ocaml">here</a>. If your
+code uses <code class="language-plaintext highlighter-rouge">ppx</code>, it is recommended to use the
+<code class="language-plaintext highlighter-rouge">4.10.0+multicore+no-effect-syntax</code> compiler variant to maintain compatibility.</p>
+
+<p>After installing the compiler, Lwt with multicore support can be installed by
+pinning the repository -</p>
+
+<div class="language-plaintext highlighter-rouge"><div class="highlight"><pre class="highlight"><code>opam pin add lwt https://github.com/Sudha247/lwt-multicore.git
+</code></pre></div></div>
+
+<h3 id="example">Example</h3>
+
+<p>Let us take an example of a simple Lwt server that accepts integer requests and
+returns its fibonacci number. A sequential version of this server is
+<a href="https://github.com/Sudha247/code-samples/blob/master/lwt-server/fib.ml">here</a>.</p>
+
+<p>With the help of <code class="language-plaintext highlighter-rouge">Lwt_preemptive</code>, we could process multiple requests at a time.
+To do this, the parent domain keeps accepting requests. Once a request is
+received, the actual computation and writing response is delegated to a
+detached task that gets executed on another domain.</p>
+
+<div class="language-ocaml highlighter-rouge"><div class="highlight"><pre class="highlight"><code><span class="k">let</span> <span class="n">detached</span> <span class="n">oc</span> <span class="o">=</span> <span class="c">(* run computation in detached domain *)</span>
+  <span class="nn">Lwt_preemptive</span><span class="p">.</span><span class="n">detach</span> <span class="p">(</span><span class="k">fun</span> <span class="n">msg</span> <span class="o">-&gt;</span> <span class="n">compute</span> <span class="n">msg</span> <span class="o">|&gt;</span> <span class="n">send_res</span> <span class="n">oc</span><span class="p">)</span>
+
+<span class="k">let</span> <span class="k">rec</span> <span class="n">main</span> <span class="n">oc</span> <span class="n">ic</span> <span class="o">=</span>
+  <span class="k">match</span><span class="o">%</span><span class="n">lwt</span> <span class="n">recv</span> <span class="n">ic</span> <span class="k">with</span> <span class="c">(* accept request *)</span>
+  <span class="o">|</span> <span class="nc">Some</span> <span class="n">msg</span> <span class="o">-&gt;</span>
+    <span class="n">incr</span> <span class="n">counter</span><span class="p">;</span>
+    <span class="k">if</span> <span class="o">!</span><span class="n">counter</span> <span class="ow">mod</span> <span class="n">num_domains</span> <span class="o">=</span> <span class="mi">0</span> <span class="k">then</span> <span class="k">begin</span>
+      <span class="n">compute</span> <span class="n">msg</span> <span class="o">|&gt;</span> <span class="n">send_res</span> <span class="n">oc</span><span class="p">;</span> <span class="c">(* run in parent domain *)</span>
+      <span class="n">main</span> <span class="n">oc</span> <span class="n">ic</span>
+      <span class="k">end</span>
+    <span class="k">else</span>
+      <span class="n">detached</span> <span class="n">oc</span> <span class="n">msg</span> <span class="o">&gt;&gt;=</span> <span class="c">(* delegate to detached domain *)</span>
+      <span class="k">fun</span> <span class="bp">()</span> <span class="o">-&gt;</span> <span class="n">main</span> <span class="n">oc</span> <span class="n">ic</span>
+  <span class="o">|</span> <span class="nc">None</span> <span class="o">-&gt;</span> <span class="n">return_unit</span>
+</code></pre></div></div>
+
+<p>We also occassionally perform the computation in the parent domain. This is to
+ensure that computations are (almost) equally distributed amongst available
+cores. Full code of parallel server is available <a href="https://github.com/Sudha247/code-samples/blob/master/lwt-server/fibp.ml">here</a>.</p>
+
+<h3 id="performance">Performance</h3>
+
+<p>The parallel fibonacci server was benchmarked with 10 clients and 10 requests
+per client. Each request was the value <code class="language-plaintext highlighter-rouge">45</code> and server had to run a non-tail
+recursive <code class="language-plaintext highlighter-rouge">fib 45</code> for every request. Performance numbers are below, the
+client’s code is available
+<a href="https://github.com/Sudha247/code-samples/blob/master/lwt-server/client.ml">here</a>.</p>
+
+<p><strong>Systhreads version</strong> - <code class="language-plaintext highlighter-rouge">4.10.0</code> compiler</p>
+
+<p>Time taken by systhreads version: <code class="language-plaintext highlighter-rouge">15m1.059s</code></p>
+
+<p><strong>Multicore version</strong> - <code class="language-plaintext highlighter-rouge">4.10.0+multicore+no-effect-syntax</code> compiler</p>
+
+<table>
+  <thead>
+    <tr>
+      <th>Cores</th>
+      <th>Time</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>14m52.014s</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>7m26.023s</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>5m21.133s</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>4m9.774s</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>4m9.769s</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>4m0.854s</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td>3m51.936s</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td>3m43.021s</td>
+    </tr>
+  </tbody>
+</table>
+
+<p>We can observe quite some speedup as the number of cores increase.</p>
+
+<hr />
+
+<p>This is an attempt to introduce parallelism in Lwt in a backwards compatible
+manner. It is still an experimental feature. If you find any bugs or have any
+questions, feel free to use the <a href="https://github.com/Sudha247/lwt-multicore/issues">issue tracker</a> or get in touch. In case any existing code breaks with the
+multicore version of Lwt, please let us know.</p>
+
+<p>If you managed to speed up any of your applications with the help of
+<code class="language-plaintext highlighter-rouge">Lwt_preemptive</code> (or Multicore OCaml in general), we’d be happy to have it as a
+parallel benchmark in our <a href="https://github.com/ocaml-bench/sandmark">benchmarking suite Sandmark</a>.
+Consider submitting a PR or open an issue if you need any help with integrating
+your benchmark.</p>
+    
+  </article>
+
+  <!-- 
+    <div class="related-posts">
+      <h4>Related Posts</h4>
+      <ul>
+        
+          <li>
+            <h5>
+              <a href="http://localhost:4000/2020/09/30/hello-world/">
+                Hello, World!
+                <small>30 Sep 2020</small>
+              </a>
+            </h5>
+          </li>
+        
+      </ul>
+    </div>
+   -->
+
+  <div class="author-info">
+    
+  
+      
+  </div>
+  
+  
+</div>
+
+      </div>
+      <a href="#0" class="wc-top">Top</a>
+
+    </div>
+
+    <label for="sidebar-checkbox" class="sidebar-toggle">
+      <span></span>
+    </label>
+
+    <script type="text/javascript">
+      var config = {
+        "browser_warning_page": "http://localhost:4000/browser-warning/",
+        "disqus_shortname": "sudha247"
+      };
+      /* Browser support detection */
+      var browserSupport = (function(){
+        var htmlElemClasses = document.querySelector('html').className.split(' ');
+        for ( var i = 0; i < htmlElemClasses.length; i += 1 ){
+          var className = htmlElemClasses[i];
+          if ( className === 'lt-ie9' ){
+            return true;
+          }
+        }
+      }());
+
+      if (browserSupport){
+        window.location="http://localhost:4000/browser-warning/";
+      }
+
+      /* To avoid render blocking css */
+      var cb = function() {
+        var l = document.createElement('link'); l.rel = 'stylesheet';
+        l.href = '//fonts.googleapis.com/css?family=PT+Sans';
+        var h = document.getElementsByTagName('head')[0]; h.parentNode.insertBefore(l, h);
+      };
+      var raf = requestAnimationFrame || mozRequestAnimationFrame ||
+          webkitRequestAnimationFrame || msRequestAnimationFrame;
+      if (raf) raf(cb);
+      else window.addEventListener('load', cb);
+
+
+    </script>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.2/jquery.min.js"></script>
+    <script async type="text/javascript" src="http://localhost:4000/assets/js/gaya.min.js"></script>
+
+    
+    
+  </body>
+</html>

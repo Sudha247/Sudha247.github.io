@@ -5,9 +5,164 @@
     <description></description>
     <link>http://localhost:4000/</link>
     <atom:link href="http://localhost:4000/feed.xml" rel="self" type="application/rss+xml"/>
-    <pubDate>Thu, 01 Oct 2020 23:05:25 +0530</pubDate>
-    <lastBuildDate>Thu, 01 Oct 2020 23:05:25 +0530</lastBuildDate>
+    <pubDate>Fri, 02 Oct 2020 16:31:32 +0530</pubDate>
+    <lastBuildDate>Fri, 02 Oct 2020 16:31:32 +0530</lastBuildDate>
     <generator>Jekyll v3.9.0</generator>
+    
+      <item>
+        <title>Introducing parallelism in Lwt with Multicore OCaml</title>
+        <description>&lt;p&gt;&lt;a href=&quot;https://ocsigen.org/lwt/&quot;&gt;Lwt&lt;/a&gt; is OCaml’s widely used concurrency
+library. It offers powerful primitives for concurrent programming which have
+been used in many systems for effective I/O parallelism.
+Recently, we have been doing some experiments to add support for CPU
+parallelism in Lwt with &lt;a href=&quot;https://github.com/ocaml-multicore/ocaml-multicore&quot;&gt;Multicore OCaml&lt;/a&gt;.
+This post will showcase some ways to speed up Lwt applications with Multicore
+OCaml.&lt;/p&gt;
+
+&lt;h3 id=&quot;lwt_preemptive&quot;&gt;Lwt_preemptive&lt;/h3&gt;
+
+&lt;p&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Lwt_preemptive&lt;/code&gt; module has the facility for preemptive scheduling, unlike rest
+of Lwt which operates in a cooperative manner.
+&lt;a href=&quot;https://ocsigen.org/lwt/5.2.0/api/Lwt_preemptive&quot;&gt;&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Lwt_preemptive&lt;/code&gt;&lt;/a&gt; runs every task in a new &lt;a href=&quot;https://caml.inria.fr/pub/docs/manual-ocaml/libref/Thread.html&quot;&gt;systhread&lt;/a&gt;.
+All the systhreads run concurrently, but need to obtain the master runtime lock in order to execute OCaml code. Hence, the OCaml parts of the program do not run any faster.&lt;/p&gt;
+
+&lt;p&gt;We bring in parallelism via the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Lwt_preemptive&lt;/code&gt; module.
+In the Multicore version illustrated below, every new task will run on a
+separate &lt;a href=&quot;https://github.com/ocaml-multicore/ocaml-multicore/blob/parallel_minor_gc/stdlib/domain.mli&quot;&gt;domain&lt;/a&gt;,
+in parallel with all other tasks running at that point. This gives us an easy
+way to run tasks in multiple cores. For best results, number of
+domains spawned should be equal to the number of cores available. Number of
+domains can be controlled via the &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Lwt_preemptive.set_bounds&lt;/code&gt; method. The
+&lt;a href=&quot;https://github.com/Sudha247/lwt-multicore/blob/master/src/unix/lwt_preemptive.mli&quot;&gt;API docs&lt;/a&gt; have more details.&lt;/p&gt;
+
+&lt;p&gt;We shall go through an example to see how we could use &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Lwt_preemptive&lt;/code&gt;
+to speedup an application.&lt;/p&gt;
+
+&lt;h3 id=&quot;installation&quot;&gt;Installation&lt;/h3&gt;
+
+&lt;p&gt;To start with, Multicore OCaml needs to be installed. This can be done with
+multicore opam. Installation instructions can be found &lt;a href=&quot;https://github.com/ocaml-multicore/multicore-opam#install-multicore-ocaml&quot;&gt;here&lt;/a&gt;. If your
+code uses &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;ppx&lt;/code&gt;, it is recommended to use the
+&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;4.10.0+multicore+no-effect-syntax&lt;/code&gt; compiler variant to maintain compatibility.&lt;/p&gt;
+
+&lt;p&gt;After installing the compiler, Lwt with multicore support can be installed by
+pinning the repository -&lt;/p&gt;
+
+&lt;div class=&quot;language-plaintext highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;opam pin add lwt https://github.com/Sudha247/lwt-multicore.git
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;h3 id=&quot;example&quot;&gt;Example&lt;/h3&gt;
+
+&lt;p&gt;Let us take an example of a simple Lwt server that accepts integer requests and
+returns its fibonacci number. A sequential version of this server is
+&lt;a href=&quot;https://github.com/Sudha247/code-samples/blob/master/lwt-server/fib.ml&quot;&gt;here&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;With the help of &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Lwt_preemptive&lt;/code&gt;, we could process multiple requests at a time.
+To do this, the parent domain keeps accepting requests. Once a request is
+received, the actual computation and writing response is delegated to a
+detached task that gets executed on another domain.&lt;/p&gt;
+
+&lt;div class=&quot;language-ocaml highlighter-rouge&quot;&gt;&lt;div class=&quot;highlight&quot;&gt;&lt;pre class=&quot;highlight&quot;&gt;&lt;code&gt;&lt;span class=&quot;k&quot;&gt;let&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;detached&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;oc&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;c&quot;&gt;(* run computation in detached domain *)&lt;/span&gt;
+  &lt;span class=&quot;nn&quot;&gt;Lwt_preemptive&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;detach&lt;/span&gt; &lt;span class=&quot;p&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;fun&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;msg&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;compute&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;msg&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;|&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;send_res&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;oc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;)&lt;/span&gt;
+
+&lt;span class=&quot;k&quot;&gt;let&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;rec&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;main&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;oc&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ic&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt;
+  &lt;span class=&quot;k&quot;&gt;match&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;%&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;lwt&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;recv&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ic&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;with&lt;/span&gt; &lt;span class=&quot;c&quot;&gt;(* accept request *)&lt;/span&gt;
+  &lt;span class=&quot;o&quot;&gt;|&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Some&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;msg&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt;
+    &lt;span class=&quot;n&quot;&gt;incr&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;counter&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;counter&lt;/span&gt; &lt;span class=&quot;ow&quot;&gt;mod&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;num_domains&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;then&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;begin&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;compute&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;msg&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;|&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;send_res&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;oc&lt;/span&gt;&lt;span class=&quot;p&quot;&gt;;&lt;/span&gt; &lt;span class=&quot;c&quot;&gt;(* run in parent domain *)&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;main&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;oc&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ic&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;end&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;else&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;detached&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;oc&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;msg&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;gt;&amp;gt;=&lt;/span&gt; &lt;span class=&quot;c&quot;&gt;(* delegate to detached domain *)&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;fun&lt;/span&gt; &lt;span class=&quot;bp&quot;&gt;()&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;main&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;oc&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ic&lt;/span&gt;
+  &lt;span class=&quot;o&quot;&gt;|&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;None&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;-&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;return_unit&lt;/span&gt;
+&lt;/code&gt;&lt;/pre&gt;&lt;/div&gt;&lt;/div&gt;
+
+&lt;p&gt;We also occassionally perform the computation in the parent domain. This is to
+ensure that computations are (almost) equally distributed amongst available
+cores. Full code of parallel server is available &lt;a href=&quot;https://github.com/Sudha247/code-samples/blob/master/lwt-server/fibp.ml&quot;&gt;here&lt;/a&gt;.&lt;/p&gt;
+
+&lt;h3 id=&quot;performance&quot;&gt;Performance&lt;/h3&gt;
+
+&lt;p&gt;The parallel fibonacci server was benchmarked with 10 clients and 10 requests
+per client. Each request was the value &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;45&lt;/code&gt; and server had to run a non-tail
+recursive &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;fib 45&lt;/code&gt; for every request. Performance numbers are below, the
+client’s code is available
+&lt;a href=&quot;https://github.com/Sudha247/code-samples/blob/master/lwt-server/client.ml&quot;&gt;here&lt;/a&gt;.&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Systhreads version&lt;/strong&gt; - &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;4.10.0&lt;/code&gt; compiler&lt;/p&gt;
+
+&lt;p&gt;Time taken by systhreads version: &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;15m1.059s&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;Multicore version&lt;/strong&gt; - &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;4.10.0+multicore+no-effect-syntax&lt;/code&gt; compiler&lt;/p&gt;
+
+&lt;table&gt;
+  &lt;thead&gt;
+    &lt;tr&gt;
+      &lt;th&gt;Cores&lt;/th&gt;
+      &lt;th&gt;Time&lt;/th&gt;
+    &lt;/tr&gt;
+  &lt;/thead&gt;
+  &lt;tbody&gt;
+    &lt;tr&gt;
+      &lt;td&gt;1&lt;/td&gt;
+      &lt;td&gt;14m52.014s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;2&lt;/td&gt;
+      &lt;td&gt;7m26.023s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;3&lt;/td&gt;
+      &lt;td&gt;5m21.133s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;4&lt;/td&gt;
+      &lt;td&gt;4m9.774s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;5&lt;/td&gt;
+      &lt;td&gt;4m9.769s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;6&lt;/td&gt;
+      &lt;td&gt;4m0.854s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;7&lt;/td&gt;
+      &lt;td&gt;3m51.936s&lt;/td&gt;
+    &lt;/tr&gt;
+    &lt;tr&gt;
+      &lt;td&gt;8&lt;/td&gt;
+      &lt;td&gt;3m43.021s&lt;/td&gt;
+    &lt;/tr&gt;
+  &lt;/tbody&gt;
+&lt;/table&gt;
+
+&lt;p&gt;We can observe quite some speedup as the number of cores increase.&lt;/p&gt;
+
+&lt;hr /&gt;
+
+&lt;p&gt;This is an attempt to introduce parallelism in Lwt in a backwards compatible
+manner. It is still an experimental feature. If you find any bugs or have any
+questions, feel free to use the &lt;a href=&quot;https://github.com/Sudha247/lwt-multicore/issues&quot;&gt;issue tracker&lt;/a&gt; or get in touch. In case any existing code breaks with the
+multicore version of Lwt, please let us know.&lt;/p&gt;
+
+&lt;p&gt;If you managed to speed up any of your applications with the help of
+&lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;Lwt_preemptive&lt;/code&gt; (or Multicore OCaml in general), we’d be happy to have it as a
+parallel benchmark in our &lt;a href=&quot;https://github.com/ocaml-bench/sandmark&quot;&gt;benchmarking suite Sandmark&lt;/a&gt;.
+Consider submitting a PR or open an issue if you need any help with integrating
+your benchmark.&lt;/p&gt;
+</description>
+        <pubDate>Thu, 01 Oct 2020 00:00:00 +0530</pubDate>
+        <link>http://localhost:4000/2020/10/01/lwt-multicore/</link>
+        <guid isPermaLink="true">http://localhost:4000/2020/10/01/lwt-multicore/</guid>
+        
+        <category>ocaml</category>
+        
+        
+      </item>
     
       <item>
         <title>Hello, World!</title>

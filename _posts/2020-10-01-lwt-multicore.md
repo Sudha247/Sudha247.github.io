@@ -4,7 +4,7 @@ title: Introducing parallelism in Lwt with Multicore OCaml
 tags: ocaml
 ---
 
-[Lwt](https://ocsigen.org/lwt/) is OCaml's widely used monadic concurrency
+[Lwt](https://ocsigen.org/lwt/) is OCaml's widely used concurrency
 library. It offers powerful primitives for concurrent programming which have
 been used in many systems for effective I/O parallelism.
 Recently, we have been doing some experiments to add support for CPU
@@ -16,10 +16,8 @@ OCaml.
 
 `Lwt_preemptive` module has the facility for preemptive scheduling, unlike rest
 of Lwt which operates in a cooperative manner.
-Originally, [`Lwt_preemptive`](https://ocsigen.org/lwt/5.2.0/api/Lwt_preemptive) runs every task in a new [systhread](https://caml.inria.fr/pub/docs/manual-ocaml/libref/Thread.html).
-Although all the systhreads run concurrently, they do so on a single core. In
-effect, there is no significant performance improvement compared with
-sequential execution.
+[`Lwt_preemptive`](https://ocsigen.org/lwt/5.2.0/api/Lwt_preemptive) runs every task in a new [systhread](https://caml.inria.fr/pub/docs/manual-ocaml/libref/Thread.html).
+All the systhreads run concurrently, but need to obtain the master runtime lock in order to execute OCaml code. Hence, the OCaml parts of the program do not run any faster.
 
 We bring in parallelism via the `Lwt_preemptive` module.
 In the Multicore version illustrated below, every new task will run on a
