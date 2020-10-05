@@ -3,10 +3,10 @@
   <channel>
     <title>Sudha Parimala</title>
     <description></description>
-    <link>http://localhost:4000/</link>
-    <atom:link href="http://localhost:4000/feed.xml" rel="self" type="application/rss+xml"/>
-    <pubDate>Fri, 02 Oct 2020 16:31:32 +0530</pubDate>
-    <lastBuildDate>Fri, 02 Oct 2020 16:31:32 +0530</lastBuildDate>
+    <link>http://sudha247.github.io/</link>
+    <atom:link href="http://sudha247.github.io/feed.xml" rel="self" type="application/rss+xml"/>
+    <pubDate>Sun, 04 Oct 2020 23:05:22 +0530</pubDate>
+    <lastBuildDate>Sun, 04 Oct 2020 23:05:22 +0530</lastBuildDate>
     <generator>Jekyll v3.9.0</generator>
     
       <item>
@@ -85,10 +85,10 @@ cores. Full code of parallel server is available &lt;a href=&quot;https://github
 
 &lt;h3 id=&quot;performance&quot;&gt;Performance&lt;/h3&gt;
 
-&lt;p&gt;The parallel fibonacci server was benchmarked with 10 clients and 10 requests
-per client. Each request was the value &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;45&lt;/code&gt; and server had to run a non-tail
-recursive &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;fib 45&lt;/code&gt; for every request. Performance numbers are below, the
-client’s code is available
+&lt;p&gt;The parallel fibonacci server was benchmarked on a Intel Xeon Gold 5120, with 
+10 clients and 10 requests per client. Each request was the value &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;45&lt;/code&gt; and 
+server had to run a non-tail recursive &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;fib 45&lt;/code&gt; for every request. 
+Performance numbers are below, the client’s code is available
 &lt;a href=&quot;https://github.com/Sudha247/code-samples/blob/master/lwt-server/client.ml&quot;&gt;here&lt;/a&gt;.&lt;/p&gt;
 
 &lt;p&gt;&lt;strong&gt;Systhreads version&lt;/strong&gt; - &lt;code class=&quot;language-plaintext highlighter-rouge&quot;&gt;4.10.0&lt;/code&gt; compiler&lt;/p&gt;
@@ -156,8 +156,8 @@ Consider submitting a PR or open an issue if you need any help with integrating
 your benchmark.&lt;/p&gt;
 </description>
         <pubDate>Thu, 01 Oct 2020 00:00:00 +0530</pubDate>
-        <link>http://localhost:4000/2020/10/01/lwt-multicore/</link>
-        <guid isPermaLink="true">http://localhost:4000/2020/10/01/lwt-multicore/</guid>
+        <link>http://sudha247.github.io/2020/10/01/lwt-multicore/</link>
+        <guid isPermaLink="true">http://sudha247.github.io/2020/10/01/lwt-multicore/</guid>
         
         <category>ocaml</category>
         
@@ -169,8 +169,8 @@ your benchmark.&lt;/p&gt;
         <description>&lt;p&gt;This is my first post. Have a nice day!&lt;/p&gt;
 </description>
         <pubDate>Wed, 30 Sep 2020 00:00:00 +0530</pubDate>
-        <link>http://localhost:4000/2020/09/30/hello-world/</link>
-        <guid isPermaLink="true">http://localhost:4000/2020/09/30/hello-world/</guid>
+        <link>http://sudha247.github.io/2020/09/30/hello-world/</link>
+        <guid isPermaLink="true">http://sudha247.github.io/2020/09/30/hello-world/</guid>
         
         <category>other</category>
         

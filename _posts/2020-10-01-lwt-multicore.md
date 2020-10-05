@@ -80,10 +80,10 @@ cores. Full code of parallel server is available [here](https://github.com/Sudha
 
 ### Performance
 
-The parallel fibonacci server was benchmarked with 10 clients and 10 requests
-per client. Each request was the value `45` and server had to run a non-tail
-recursive `fib 45` for every request. Performance numbers are below, the
-client's code is available
+The parallel fibonacci server was benchmarked on a Intel Xeon Gold 5120, with 
+10 clients and 10 requests per client. Each request was the value `45` and 
+server had to run a non-tail recursive `fib 45` for every request. 
+Performance numbers are below, the client's code is available
 [here](https://github.com/Sudha247/code-samples/blob/master/lwt-server/client.ml).
 
 **Systhreads version** - `4.10.0` compiler
